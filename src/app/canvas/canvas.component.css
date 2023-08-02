@@ -1,0 +1,5 @@
+.canvas {
+    position: absolute;
+    background: #495867;
+    z-index: -1;
+}

@@ -11,14 +11,17 @@ export class CanvasComponent implements OnInit {
   private ctx!: CanvasRenderingContext2D;
   
   pointList: Point[] = [];
-  numberOfPoints: number = 10;
+  numberOfPoints: number = 100;
   triangulation: [Point, Point, Point][] = [];
+  voronoiDiagram: [Point, Point][] = [];
 
   constructor(
   ) { }
 
-  public screenWidth: any;
-  public screenHeight: any;
+  public screenWidth!: number;
+  public screenHeight!: number;
+  public drawSceneWidth!: number;
+  public drawSceneHeight!: number;
   
   @HostListener('window:resize', ['$event'])
   onResize() {
@@ -29,6 +32,8 @@ export class CanvasComponent implements OnInit {
   ngOnInit() {
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+    this.drawSceneWidth = window.innerWidth * 1.2;
+    this.drawSceneHeight = window.innerHeight * 1.2;
   }
 
   ngAfterViewInit() {
@@ -40,14 +45,19 @@ export class CanvasComponent implements OnInit {
   initialize() {
     this.pointList = this.createRandomPointList(this.numberOfPoints);
     this.triangulation = this.bowyerWatson(this.pointList);
+    this.voronoiDiagram = this.computeVoronoiDiagram(this.triangulation);
     console.log("Triangulation :");
     console.log(this.triangulation);
+    console.log("VoronoiDigram");
+    console.log(this.voronoiDiagram);
   }
 
   update() {
     this.clearCanvas();
     this.drawVertices(this.triangulation, this.ctx);
     this.drawTriangles(this.triangulation, this.ctx);
+    this.drawSegment(this.voronoiDiagram, this.ctx);
+    //this.drawCircumcircles(this.triangulation, this.ctx);
     window.requestAnimationFrame(this.update.bind(this));
   }
   
@@ -65,6 +75,32 @@ export class CanvasComponent implements OnInit {
     return pointList;
   }
 
+  computeVoronoiDiagram(triangulation: [Point, Point, Point][]): [Point, Point][] {
+    //let centersOfCircumcircles: Point[] = this.getCircumcenters(triangulation);
+    let diagram: [Point, Point][] = [];
+
+    for (let triangle of triangulation) {
+      for (let edge of this.extractEdges(triangle)) {
+        for (let otherTriangle of this.removeFromList(triangulation, triangle)) {
+          if (this.edgeIsSharedByOtherTriangles(edge, [otherTriangle])) {
+            let centerOftriangleCircumcircle: Point = this.calculateCircumcircle(triangle[0], triangle[1], triangle[2]).center;
+            let centerOfOtherTriangleCircumcircle: Point = this.calculateCircumcircle(otherTriangle[0], otherTriangle[1], otherTriangle[2]).center;
+
+            let newSegment: [Point, Point] = [centerOftriangleCircumcircle, centerOfOtherTriangleCircumcircle];
+            if (!diagram.some(segment => {
+              return (newSegment[0] === segment[0] && newSegment[1] === segment[1]) ||
+                     (newSegment[0] === segment[1] && newSegment[1] === segment[0]);
+            })) {
+              diagram.push(newSegment);
+            }
+          }
+        }
+      }
+      triangulation = this.removeFromList(triangulation, triangle);
+    }
+    return diagram;
+  }
+
   bowyerWatson(pointList: Point[]) {
     let triangulation: [Point, Point, Point][] = [];
     let st: [Point, Point, Point] = this.createSupraTriangle(this.screenWidth, this.screenHeight);
@@ -79,8 +115,8 @@ export class CanvasComponent implements OnInit {
           badTriangles.push(triangle);
         }
       }
-      console.log("Bad Triangles");
-      console.log(badTriangles);
+      // console.log("Bad Triangles");
+      // console.log(badTriangles);
 
       let polygon: [Point, Point][] = [];
       for (let triangle of badTriangles) {
@@ -91,8 +127,8 @@ export class CanvasComponent implements OnInit {
           }
         }
       }
-      console.log("Polygon");
-      console.log(polygon);
+      // console.log("Polygon");
+      // console.log(polygon);
 
       for (let triangle of badTriangles) {
         triangulation = this.removeFromList(triangulation, triangle);
@@ -196,6 +232,39 @@ export class CanvasComponent implements OnInit {
         context.fill();
       }
     }
+  }
+
+  drawSegment(diagram: [Point, Point][], context: CanvasRenderingContext2D): void {
+    for(let segment of diagram) {
+        context.beginPath();
+        context.moveTo(segment[0].x, segment[0].y);
+        context.lineTo(segment[1].x, segment[1].y);
+        context.strokeStyle = 'blue';
+        context.stroke();
+        context.strokeStyle = 'black';
+    }
+  }
+
+  drawCircumcircles(triangulation: [Point, Point, Point][], context: CanvasRenderingContext2D): void {
+    context.strokeStyle = 'red';  // Setting the stroke color to red
+
+    for(let triangle of triangulation) {
+        // Calculate the circumcircle of the current triangle
+        let circumcircle = this.calculateCircumcircle(triangle[0], triangle[1], triangle[2]);
+
+        context.beginPath();
+        // Draw the circle using the center point and radius of the circumcircle
+        context.arc(circumcircle.center.x, circumcircle.center.y, circumcircle.radius, 0, 2 * Math.PI);
+        context.stroke();
+        
+        // Draw the center of the circumcircle
+        context.fillStyle = 'red '; // Setting fill color to blue for the center point
+        context.beginPath();
+        context.arc(circumcircle.center.x, circumcircle.center.y, 3, 0, 2 * Math.PI);  // Radius of 3 for the center point
+        context.fill();
+    }
+    context.strokeStyle = 'black';
+    context.fillStyle = 'black';
   }
 
 }
